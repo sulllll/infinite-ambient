@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Infinite Ambient</title>
+<meta name="description" content="Endless ambient scenes with slow generative music, built to run all day as a live wallpaper.">
+<style>
+:root {
+  --bg: #06080e;
+  --card: #0d111b;
+  --ink: #e8ecf4;
+  --soft: rgba(232, 236, 244, 0.66);
+  --edge: rgba(255, 255, 255, 0.09);
+  --accent: #a9bcff;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body { margin: 0; color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+main { max-width: 1120px; margin: 0 auto; padding: 56px 16px 64px; }
+h1 { font-size: clamp(30px, 5vw, 46px); font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; margin: 0 0 10px; }
+.lede { color: var(--soft); max-width: 62ch; margin: 0 0 36px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 20px; }
+.card {
+  display: flex; flex-direction: column; text-decoration: none; color: inherit;
+  background: var(--card); border: 1px solid var(--edge); border-radius: 14px; overflow: hidden;
+  transition: transform 0.25s ease, border-color 0.25s ease;
+}
+.card:hover, .card:focus-visible { transform: translateY(-2px); border-color: rgba(169, 188, 255, 0.45); outline: none; }
+.card img, .card svg { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; background: #000; }
+.card .body { padding: 14px 16px 16px; }
+.card h2 { font-size: 17px; font-weight: 600; margin: 0 0 2px; }
+.card p { margin: 0; color: var(--soft); font-size: 14px; }
+.card .music { margin-top: 8px; font-size: 13px; }
+.card .from { margin-top: 8px; font-size: 12px; color: var(--accent); }
+h3 { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); margin: 44px 0 10px; }
+.notes { display: grid; gap: 6px; max-width: 70ch; color: var(--soft); font-size: 14px; }
+.notes b { color: var(--ink); font-weight: 600; }
+kbd { font: 12px ui-monospace, Consolas, monospace; padding: 1px 6px; border: 1px solid var(--edge); border-radius: 4px; color: var(--ink); }
+code { font: 12.5px ui-monospace, Consolas, monospace; color: var(--ink); overflow-wrap: anywhere; }
+a { color: var(--accent); }
+footer { margin-top: 44px; color: var(--soft); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Infinite Ambient</h1>
+  <p class="lede">Endless scenes that you drift through, each with its own slow generative music that never plays the same way twice. They run in the browser with nothing to install, and they are built to stay on all day as a live wallpaper.</p>
+
+  <div class="grid">
+    <a class="card" href="aurora/index.html">
+      <img src="thumbs/aurora.jpg" width="640" height="360" alt="Green and violet aurora curtains over a frozen lake under a starry sky">
+      <div class="body">
+        <h2>Aurora Drift</h2>
+        <p>A frozen lake under the northern lights.</p>
+        <p class="music">Glass bells, a felt piano and a wordless choir, mostly in E minor. Wind.</p>
+      </div>
+    </a>
+    <a class="card" href="abyss/index.html">
+      <img src="thumbs/abyss.jpg" width="640" height="360" alt="Glowing jellyfish drifting in dark blue water with faint shafts of light">
+      <div class="body">
+        <h2>Abyss</h2>
+        <p>Drifting through the deep sea.</p>
+        <p class="music">Deep drones, whale-like calls and sonar pings, mostly in A minor. Water.</p>
+      </div>
+    </a>
+    <a class="card" href="dunes/index.html">
+      <img src="thumbs/dunes.jpg" width="640" height="360" alt="Long sand dunes with fine ripples under a low golden sun">
+      <div class="body">
+        <h2>Dune Sea</h2>
+        <p>Endless dunes at the golden hour.</p>
+        <p class="music">Kalimba, warm pads and a felt piano, mostly in D. Desert wind.</p>
+      </div>
+    </a>
+    <a class="card" href="nebula/index.html">
+      <img src="thumbs/nebula.jpg" width="640" height="360" alt="Pink, violet and blue clouds of gas between many stars">
+      <div class="body">
+        <h2>Nebula Drift</h2>
+        <p>Through the clouds between the stars.</p>
+        <p class="music">Slow pads, glass bells and two pianos, mostly in F Lydian.</p>
+      </div>
+    </a>
+    <a class="card" href="https://sulllll.github.io/Nightscape/">
+      <svg viewBox="0 0 640 360" role="img" aria-label="Drawing of a full moon over a sea of clouds at night">
+        <defs>
+          <linearGradient id="ns-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050913"/><stop offset="0.7" stop-color="#101d3a"/><stop offset="1" stop-color="#1b2a4c"/></linearGradient>
+          <radialGradient id="ns-glow"><stop offset="0" stop-color="#dfe8ff" stop-opacity="0.55"/><stop offset="1" stop-color="#dfe8ff" stop-opacity="0"/></radialGradient>
+          <filter id="ns-soft" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="9"/></filter>
+        </defs>
+        <rect width="640" height="360" fill="url(#ns-sky)"/>
+        <g fill="#fff" opacity="0.8"><circle cx="70" cy="40" r="1"/><circle cx="150" cy="92" r="0.8"/><circle cx="232" cy="30" r="1.1"/><circle cx="318" cy="70" r="0.7"/><circle cx="560" cy="44" r="0.9"/><circle cx="604" cy="120" r="0.8"/><circle cx="380" cy="24" r="0.8"/><circle cx="110" cy="150" r="0.7"/></g>
+        <circle cx="452" cy="104" r="90" fill="url(#ns-glow)"/>
+        <circle cx="452" cy="104" r="26" fill="#eef2fb"/>
+        <g filter="url(#ns-soft)">
+          <ellipse cx="120" cy="290" rx="190" ry="52" fill="#4a5a7c" opacity="0.85"/>
+          <ellipse cx="420" cy="300" rx="260" ry="58" fill="#56688c" opacity="0.85"/>
+          <ellipse cx="300" cy="250" rx="170" ry="36" fill="#6f81a6" opacity="0.6"/>
+          <ellipse cx="560" cy="236" rx="120" ry="40" fill="#7d8fb3" opacity="0.55"/>
+          <ellipse cx="320" cy="350" rx="380" ry="48" fill="#2c3958"/>
+        </g>
+      </svg>
+      <div class="body">
+        <h2>Nightscape</h2>
+        <p>Floating above a sea of clouds at night.</p>
+        <p class="music">A felt piano and a soft choir in D, over the wind.</p>
+        <p class="from">A fork of WeebLabs/Nightscape with added music</p>
+      </div>
+    </a>
+  </div>
+
+  <h3>Using a scene</h3>
+  <div class="notes">
+    <div><b>Sound</b> starts when you click or press a key. Browsers do not play sound before that.</div>
+    <div><kbd>G</kbd> settings &middot; <kbd>F</kbd> or a double-click for full screen &middot; <kbd>S</kbd> sound on and off &middot; <kbd>Esc</kbd> closes the settings</div>
+    <div>The settings panel sets the volume, the music and the ambience separately, the frame rate (15, 30 or 60 fps) and the resolution. Each scene remembers its own settings.</div>
+  </div>
+
+  <h3>As a wallpaper</h3>
+  <div class="notes">
+    <div><b>Windows</b>: Lively Wallpaper (free) can show a web page as the desktop. Add a scene by its address.</div>
+    <div><b>macOS</b>: Plash (free) can show a web page as the desktop.</div>
+    <div><b>Any system</b>: open a scene in its own full-screen browser window. To let Chrome start the sound without a click, start it with <code>--autoplay-policy=no-user-gesture-required</code>.</div>
+    <div>The scenes are built to run for days: the frame rate is capped at 30 fps by default, drawing stops while the page is hidden, the resolution adapts to the graphics card, and a lost graphics context is rebuilt.</div>
+  </div>
+
+  <footer>Made with WebGL 2 and the Web Audio API. No libraries, no network requests and no tracking. <a href="https://github.com/sulllll/infinite-ambient">Source on GitHub</a></footer>
+</main>
+</body>
+</html>

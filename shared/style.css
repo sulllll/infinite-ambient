@@ -1,0 +1,63 @@
+/* Infinite Ambient - shared page style */
+:root {
+  --ink: #e8ecf4;
+  --ink-soft: rgba(232, 236, 244, 0.68);
+  --glass: rgba(10, 14, 24, 0.72);
+  --edge: rgba(255, 255, 255, 0.12);
+  --accent: #a9bcff;
+}
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+body { font: 13px/1.45 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; color: var(--ink); }
+body.idle { cursor: none; }
+canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; opacity: 0; transition: opacity 2.5s ease; }
+canvas#c.on { opacity: 1; }
+
+#ia-hint {
+  position: fixed; left: 50%; bottom: 7vh; transform: translateX(-50%);
+  max-width: calc(100vw - 32px); box-sizing: border-box;
+  padding: 8px 16px; border-radius: 999px; background: rgba(8, 12, 22, 0.5);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  color: var(--ink-soft); text-align: center; opacity: 0; transition: opacity 1.6s ease; pointer-events: none;
+}
+#ia-hint b { color: var(--ink); font-weight: 600; }
+#ia-hint.on { opacity: 1; }
+
+#ia-btn {
+  position: fixed; right: 16px; bottom: 16px; width: 40px; height: 40px; padding: 0;
+  display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--edge);
+  background: var(--glass); color: var(--ink); cursor: pointer; opacity: 0; transition: opacity 0.6s ease;
+}
+#ia-btn svg { width: 18px; height: 18px; }
+body:not(.idle) #ia-btn, #ia-btn:focus-visible, body.panel #ia-btn { opacity: 0.85; }
+
+#ia-panel {
+  position: fixed; right: 16px; bottom: 66px; box-sizing: border-box;
+  width: min(300px, calc(100vw - 32px)); max-height: calc(100vh - 90px); overflow: auto;
+  padding: 14px 16px; border-radius: 12px; border: 1px solid var(--edge); background: var(--glass);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); display: none;
+}
+body.panel #ia-panel { display: block; }
+.ia-title { font-size: 15px; font-weight: 600; }
+.ia-sub { color: var(--ink-soft); margin-bottom: 6px; }
+.ia-sec { margin-top: 14px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.ia-row { margin: 8px 0; }
+.ia-row label { display: flex; justify-content: space-between; gap: 8px; }
+.ia-row output { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ia-row input[type=range] { width: 100%; margin: 4px 0 0; accent-color: var(--accent); }
+.ia-row select { width: 100%; margin-top: 4px; }
+.ia-check { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.ia-stats { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin-top: 6px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ia-stats b { color: var(--ink); font-weight: 500; }
+.ia-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+.ia-btns a { color: var(--accent); }
+.ia-note { margin-top: 10px; color: var(--ink-soft); font-size: 12px; }
+#ia-panel select, #ia-panel button {
+  font: inherit; color: var(--ink); background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--edge); border-radius: 6px; padding: 5px 8px;
+}
+#ia-panel button { cursor: pointer; }
+#ia-err {
+  position: fixed; left: 16px; right: 16px; bottom: 16px; display: none; max-height: 50vh; overflow: auto;
+  white-space: pre-wrap; font: 12px/1.4 ui-monospace, Consolas, monospace; color: #ffc9c9;
+  background: rgba(40, 0, 0, 0.85); padding: 12px; border-radius: 8px;
+}
