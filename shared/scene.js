@@ -2,8 +2,8 @@
 
    Each scene is one full-screen WebGL 2 fragment shader plus a music setting. This
    file draws it at a capped frame rate and an adaptive resolution, recovers from a
-   lost GPU context, runs a small settings panel, and plays an ambience noise bed and
-   the generative music from shared/music.js. Nothing is loaded from the network.
+   lost GPU context, runs a small settings panel, and plays an ambience noise bed
+   with a decoded soundtrack from the same site.
 
    Built for running for days as a wallpaper:
    - the frame rate is capped (30 fps by default), and drawing stops while hidden;
@@ -13,7 +13,7 @@
    - travel wraps at the scene's world period and every animation runs on closed
      loops, so the numbers sent to the GPU stay small and the image never degrades;
    - a lost GPU context is rebuilt, or the page reloads if it is not given back;
-   - every music note frees its audio nodes when it ends.
+   - one audio source loops the decoded soundtrack independently of drawing.
 
    URL options: ?t=<seconds> start time, ?scale=<0.2-1> fixed resolution,
    ?fps=<15|30|60>, ?mute (no audio), ?nohint,
@@ -308,6 +308,7 @@ window.InfiniteScene = function (cfg) {
   /* ---- sound ---- */
   const AC = window.AudioContext || window.webkitAudioContext;
   let au = null;
+  const trackUrl = new URL(`../audio/${cfg.id}-yue2.flac`, document.baseURI);
   function noise(ctx, secs, colour) {
     const sr = ctx.sampleRate, L = Math.round(secs * sr), F = Math.round(0.5 * sr), buf = ctx.createBuffer(2, L, sr);
     for (let ch = 0; ch < 2; ch++) {
@@ -350,19 +351,46 @@ window.InfiniteScene = function (cfg) {
     comp.threshold.value = -14; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.05; comp.release.value = 1.0;
     master.connect(comp).connect(ctx.destination);
     musicBus.connect(master);
-    const music = window.createAmbient(ctx, musicBus, (Math.random() * 4294967296) >>> 0, cfg.music);
     const bed = cfg.bed ? makeBed(ctx, master, cfg.bed) : null;
-    au = { ctx, master, musicBus, music, bed };
-    // A timer, not the drawing loop, schedules the music a few seconds ahead, so it
-    // keeps going when a wallpaper app slows or stops the drawing.
-    setInterval(() => { if (live()) { au.music.schedule(ctx.currentTime + 6); if (au.bed) au.bed.update(ctx.currentTime); } }, 500);
+    au = { ctx, master, musicBus, bed, trackState: 'idle' };
+    ctx.addEventListener('statechange', sync);
+    if (bed) setInterval(() => { if (live()) bed.update(ctx.currentTime); }, 500);
+  }
+  async function loadTrack() {
+    if (au.trackState === 'loading' || (au.trackState === 'ready' && !au.media?.paused)) return;
+    au.trackState = 'loading';
+    sync();
+    try {
+      if (location.protocol === 'file:') {
+        // Local files cannot be fetched by some browsers.
+        au.media ||= new Audio(trackUrl.href);
+        au.media.loop = true;
+        levels();
+        await au.media.play();
+        if (!S.sound) au.media.pause();
+      } else {
+        const response = await fetch(trackUrl);
+        if (!response.ok) throw new Error(`Audio HTTP ${response.status}`);
+        const buffer = await au.ctx.decodeAudioData(await response.arrayBuffer());
+        const source = au.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        source.connect(au.musicBus);
+        source.start();
+      }
+      au.trackState = 'ready';
+    } catch (error) {
+      au.trackState = 'failed';
+      console.error('Could not load soundtrack.', error);
+    }
+    sync();
   }
   function levels(fade) {
     if (!au) return;
     const now = au.ctx.currentTime;
     au.master.gain.setTargetAtTime(S.sound ? S.volume * S.volume : 0, now, fade || 0.15);
-    au.musicBus.gain.setTargetAtTime(S.music * S.music * (cfg.musicGain || 1.6), now, 0.3);
-    au.music.setOn(S.music > 0);
+    au.musicBus.gain.setTargetAtTime(S.music * S.music * 1.6, now, 0.3);
+    if (au.media) au.media.volume = S.sound ? Math.min(1, (S.music * S.volume) ** 2 * 1.6) : 0;
     if (au.bed) au.bed.bus.gain.setTargetAtTime(S.bed * S.bed * (cfg.bed.gain || 1), now, 0.3);
   }
   const live = () => !!au && au.ctx.state === 'running' && S.sound;
@@ -371,21 +399,27 @@ window.InfiniteScene = function (cfg) {
     if (!au) { try { buildAudio(); } catch (e) { au = null; return; } }
     if (au.ctx.state !== 'running') au.ctx.resume().then(sync, () => {});
     levels(1.5);
+    loadTrack();
     sync();
   }
   function setSound(on) {
     S.sound = on; save();
     if (on) startSound();
-    else if (au) { levels(0.3); setTimeout(() => { if (!S.sound && au) au.ctx.suspend().then(sync); }, 1500); }
+    else if (au) {
+      levels(0.3);
+      au.media?.pause();
+      setTimeout(() => { if (!S.sound && au) au.ctx.suspend().then(sync); }, 1500);
+    }
     sync();
   }
-  const gesture = e => { if (e.type === 'keydown' && e.key.toLowerCase() === 's') return; if (!live()) startSound(); };
+  const gesture = e => {
+    if (e.type === 'keydown' && e.key.toLowerCase() === 's') return;
+    if (!live() || au.trackState === 'failed') startSound();
+  };
   addEventListener('pointerdown', gesture, true);
   addEventListener('keydown', gesture, true);
   document.addEventListener('visibilitychange', () => {
-    if (!au) return;
-    if (document.hidden) au.ctx.suspend();
-    else if (S.sound) au.ctx.resume().then(sync, () => {});
+    if (!document.hidden && au && S.sound) au.ctx.resume().then(sync, () => {});
   });
 
   /* ---- settings panel ---- */
@@ -395,7 +429,14 @@ window.InfiniteScene = function (cfg) {
     for (const k of sliders) { $('ia-' + k).value = S[k]; $('ia-' + k + '-v').textContent = S[k] === 0 ? 'off' : Math.round(S[k] * 100) + '%'; }
     $('ia-fps').value = String(S.fps);
     $('ia-quality').value = String(S.quality);
-    $('ia-note').textContent = !AC ? 'This browser has no Web Audio.' : S.sound && !live() ? 'Click anywhere to start the sound.' : 'S turns the sound on or off.';
+    let note = 'S turns the sound on or off.';
+    if (!AC) note = 'This browser has no Web Audio.';
+    else if (S.sound && !MUTE) {
+      if (!live()) note = 'Click anywhere to start the sound.';
+      else if (au.trackState === 'loading') note = 'Loading soundtrack…';
+      else if (au.trackState === 'failed') note = 'Soundtrack failed to load. Click to retry.';
+    }
+    $('ia-note').textContent = note;
   }
   ui.addEventListener('input', e => {
     const id = e.target.id;
