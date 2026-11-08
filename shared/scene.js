@@ -313,6 +313,9 @@ window.InfiniteScene = function (cfg) {
   const canPlay = () => pageActive && !document.hidden && (Q.has('wallpaper') || document.hasFocus());
   const trackUrl = new URL(`../audio/${cfg.id}-yue2.flac`, document.baseURI);
   const effectsUrl = new URL(`../audio/${cfg.id}-effects.flac`, document.baseURI);
+  if (location.protocol !== 'file:' && (cfg.id === 'aurora' || cfg.id === 'dunes')) {
+    effectsUrl.searchParams.set('v', 'radio1');
+  }
   function noise(ctx, secs, colour) {
     const sr = ctx.sampleRate, L = Math.round(secs * sr), F = Math.round(0.5 * sr), buf = ctx.createBuffer(2, L, sr);
     for (let ch = 0; ch < 2; ch++) {

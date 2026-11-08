@@ -73,6 +73,8 @@ We extracted an audio excerpt from each video below. SheetSage2 transcribed each
 
 Synthesized effects enter in quieter passages of each score. Listen for ice rings in Aurora Drift, pressure swells in Abyss, sand brushing in Dune Sea, and distant glints in Nebula Drift.
 
+Aurora Drift and Dune Sea also have two quiet bursts of simulated cockpit radio per loop. Each exchange lasts under one second and sits on the ambient effects slider.
+
 | Scene | Classical reference | Source recording and credit |
 |---|---|---|
 | Aurora Drift | Claude Debussy, *Clair de lune* | [RagtimeDorianHenry, 0:02–1:56](https://www.youtube.com/watch?v=gmOqjIku0pM) · [Public Domain Mark on Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Clair_de_Lune_by_Claude_Debussy_(1905,_piano_solo).opus) |
