@@ -3,7 +3,7 @@
    Each scene is one full-screen WebGL 2 fragment shader plus a music setting. This
    file draws it at a capped frame rate and an adaptive resolution, recovers from a
    lost GPU context, runs a small settings panel, and plays an ambience noise bed
-   with a decoded soundtrack from the same site.
+   with a decoded soundtrack and effects from the same site.
 
    Built for running for days as a wallpaper:
    - the frame rate is capped (30 fps by default), and drawing stops while hidden;
@@ -13,10 +13,10 @@
    - travel wraps at the scene's world period and every animation runs on closed
      loops, so the numbers sent to the GPU stay small and the image never degrades;
    - a lost GPU context is rebuilt, or the page reloads if it is not given back;
-   - one audio source loops the decoded soundtrack independently of drawing.
+   - the soundtrack and effects loop in sync and pause when the page is hidden.
 
    URL options: ?t=<seconds> start time, ?scale=<0.2-1> fixed resolution,
-   ?fps=<15|30|60>, ?mute (no audio), ?nohint,
+   ?fps=<15|30|60>, ?mute (no audio), ?nohint, ?wallpaper (play without focus),
    ?shot (draw a few frames and stop, for screenshots). */
 (function () {
 'use strict';
@@ -105,7 +105,7 @@ const ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 window.InfiniteScene = function (cfg) {
   const Q = new URLSearchParams(location.search);
   const STORE = 'infinite-ambient:' + cfg.id + ':v1';
-  const S = Object.assign({ sound: true, volume: 0.6, music: 0.7, bed: cfg.bed ? cfg.bed.level : 0, fps: 30, quality: 0 }, load());
+  const S = Object.assign({ sound: true, volume: 0.6, music: 0.7, effects: 0.6, bed: cfg.bed ? cfg.bed.level : 0, fps: 30, quality: 0 }, load());
   if (Q.get('fps')) S.fps = +Q.get('fps') || 30;
   const fixedScale = Q.get('scale') ? Math.min(1, Math.max(0.2, +Q.get('scale'))) : 0;
   const MUTE = Q.has('mute');
@@ -126,6 +126,7 @@ window.InfiniteScene = function (cfg) {
       <label class="ia-check"><input type="checkbox" id="ia-sound"> Sound</label>
       ${row('volume', 'Volume')}
       ${row('music', 'Music')}
+      ${row('effects', 'Ambient effects')}
       ${cfg.bed ? row('bed', cfg.bed.label || 'Ambience') : ''}
       <div class="ia-sec">Display</div>
       <div class="ia-row"><label for="ia-fps">Frame rate</label>
@@ -308,7 +309,10 @@ window.InfiniteScene = function (cfg) {
   /* ---- sound ---- */
   const AC = window.AudioContext || window.webkitAudioContext;
   let au = null;
+  let pageActive = true;
+  const canPlay = () => pageActive && !document.hidden && (Q.has('wallpaper') || document.hasFocus());
   const trackUrl = new URL(`../audio/${cfg.id}-yue2.flac`, document.baseURI);
+  const effectsUrl = new URL(`../audio/${cfg.id}-effects.flac`, document.baseURI);
   function noise(ctx, secs, colour) {
     const sr = ctx.sampleRate, L = Math.round(secs * sr), F = Math.round(0.5 * sr), buf = ctx.createBuffer(2, L, sr);
     for (let ch = 0; ch < 2; ch++) {
@@ -346,15 +350,28 @@ window.InfiniteScene = function (cfg) {
   }
   function buildAudio() {
     const ctx = new AC();
-    const master = ctx.createGain(), comp = ctx.createDynamicsCompressor(), musicBus = ctx.createGain();
-    master.gain.value = 0; musicBus.gain.value = 0;
+    const master = ctx.createGain(), comp = ctx.createDynamicsCompressor(), musicBus = ctx.createGain(), effectsBus = ctx.createGain();
+    master.gain.value = 0; musicBus.gain.value = 0; effectsBus.gain.value = 0;
     comp.threshold.value = -14; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.05; comp.release.value = 1.0;
     master.connect(comp).connect(ctx.destination);
     musicBus.connect(master);
+    effectsBus.connect(master);
     const bed = cfg.bed ? makeBed(ctx, master, cfg.bed) : null;
-    au = { ctx, master, musicBus, bed, trackState: 'idle' };
+    au = { ctx, master, musicBus, effectsBus, bed, trackState: 'idle' };
     ctx.addEventListener('statechange', sync);
     if (bed) setInterval(() => { if (live()) bed.update(ctx.currentTime); }, 500);
+  }
+  async function decodeTrack(url) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Audio HTTP ${response.status}`);
+    return au.ctx.decodeAudioData(await response.arrayBuffer());
+  }
+  function startLoop(buffer, bus, at) {
+    const source = au.ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.connect(bus);
+    source.start(at);
   }
   async function loadTrack() {
     if (au.trackState === 'loading' || (au.trackState === 'ready' && !au.media?.paused)) return;
@@ -364,23 +381,26 @@ window.InfiniteScene = function (cfg) {
       if (location.protocol === 'file:') {
         // Local files cannot be fetched by some browsers.
         au.media ||= new Audio(trackUrl.href);
+        au.effectsMedia ||= new Audio(effectsUrl.href);
         au.media.loop = true;
+        au.effectsMedia.loop = true;
         levels();
-        await au.media.play();
-        if (!S.sound) au.media.pause();
+        await Promise.all([au.media.play(), au.effectsMedia.play().catch(() => {})]);
+        if (!S.sound || !canPlay()) pausePlayback();
+        else if (!au.effectsMedia.paused) au.effectsMedia.currentTime = au.media.currentTime;
       } else {
-        const response = await fetch(trackUrl);
-        if (!response.ok) throw new Error(`Audio HTTP ${response.status}`);
-        const buffer = await au.ctx.decodeAudioData(await response.arrayBuffer());
-        const source = au.ctx.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
-        source.connect(au.musicBus);
-        source.start();
+        const [music, effects] = await Promise.all([
+          decodeTrack(trackUrl),
+          decodeTrack(effectsUrl).catch(error => console.warn('Could not load ambient effects.', error)),
+        ]);
+        const start = au.ctx.currentTime + 0.03;
+        startLoop(music, au.musicBus, start);
+        if (effects?.length === music.length) startLoop(effects, au.effectsBus, start);
       }
       au.trackState = 'ready';
     } catch (error) {
       au.trackState = 'failed';
+      au.effectsMedia?.pause();
       console.error('Could not load soundtrack.', error);
     }
     sync();
@@ -390,14 +410,26 @@ window.InfiniteScene = function (cfg) {
     const now = au.ctx.currentTime;
     au.master.gain.setTargetAtTime(S.sound ? S.volume * S.volume : 0, now, fade || 0.15);
     au.musicBus.gain.setTargetAtTime(S.music * S.music * 1.6, now, 0.3);
+    au.effectsBus.gain.setTargetAtTime(S.effects, now, 0.3);
     if (au.media) au.media.volume = S.sound ? Math.min(1, (S.music * S.volume) ** 2 * 1.6) : 0;
+    if (au.effectsMedia) au.effectsMedia.volume = S.sound ? S.effects * S.volume ** 2 : 0;
     if (au.bed) au.bed.bus.gain.setTargetAtTime(S.bed * S.bed * (cfg.bed.gain || 1), now, 0.3);
   }
-  const live = () => !!au && au.ctx.state === 'running' && S.sound;
+  const live = () => !!au && au.ctx.state === 'running' && S.sound && canPlay();
+  function pausePlayback() {
+    if (!au) return;
+    au.media?.pause();
+    au.effectsMedia?.pause();
+    au.ctx.suspend().then(sync, () => {});
+    sync();
+  }
   function startSound() {
-    if (!S.sound || !AC || MUTE) return;
+    if (!S.sound || !AC || MUTE || !canPlay()) return;
     if (!au) { try { buildAudio(); } catch (e) { au = null; return; } }
-    if (au.ctx.state !== 'running') au.ctx.resume().then(sync, () => {});
+    if (au.ctx.state !== 'running') au.ctx.resume().then(() => {
+      if (!S.sound || !canPlay()) pausePlayback();
+      else sync();
+    }, () => {});
     levels(1.5);
     loadTrack();
     sync();
@@ -408,7 +440,8 @@ window.InfiniteScene = function (cfg) {
     else if (au) {
       levels(0.3);
       au.media?.pause();
-      setTimeout(() => { if (!S.sound && au) au.ctx.suspend().then(sync); }, 1500);
+      au.effectsMedia?.pause();
+      setTimeout(() => { if (!S.sound) pausePlayback(); }, 1500);
     }
     sync();
   }
@@ -418,12 +451,18 @@ window.InfiniteScene = function (cfg) {
   };
   addEventListener('pointerdown', gesture, true);
   addEventListener('keydown', gesture, true);
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && au && S.sound) au.ctx.resume().then(sync, () => {});
-  });
+  function followPage() {
+    if (canPlay()) startSound();
+    else pausePlayback();
+  }
+  document.addEventListener('visibilitychange', followPage);
+  addEventListener('focus', followPage);
+  addEventListener('blur', () => { if (!Q.has('wallpaper')) pausePlayback(); });
+  addEventListener('pagehide', () => { pageActive = false; pausePlayback(); });
+  addEventListener('pageshow', () => { pageActive = true; followPage(); });
 
   /* ---- settings panel ---- */
-  const sliders = ['volume', 'music'].concat(cfg.bed ? ['bed'] : []);
+  const sliders = ['volume', 'music', 'effects'].concat(cfg.bed ? ['bed'] : []);
   function sync() {
     $('ia-sound').checked = S.sound;
     for (const k of sliders) { $('ia-' + k).value = S[k]; $('ia-' + k + '-v').textContent = S[k] === 0 ? 'off' : Math.round(S[k] * 100) + '%'; }

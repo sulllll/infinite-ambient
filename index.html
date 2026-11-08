@@ -113,14 +113,14 @@ footer { margin-top: 44px; color: var(--soft); font-size: 13px; }
   <div class="notes">
     <div><b>Sound</b> starts when you click or press a key. Browsers do not play sound before that.</div>
     <div><kbd>G</kbd> settings &middot; <kbd>F</kbd> or a double-click for full screen &middot; <kbd>S</kbd> sound on and off &middot; <kbd>Esc</kbd> closes the settings</div>
-    <div>The settings panel sets the volume, the music and the ambience separately, the frame rate (15, 30 or 60 fps) and the resolution. Each scene remembers its own settings.</div>
+    <div>The settings panel has separate levels for music and ambient effects, plus display controls. Each scene remembers its own settings. Sound pauses when you leave the scene.</div>
   </div>
 
   <h3>As a wallpaper</h3>
   <div class="notes">
     <div><b>Windows</b>: Lively Wallpaper (free) can show a web page as the desktop. Add a scene by its address.</div>
     <div><b>macOS</b>: Plash (free) can show a web page as the desktop.</div>
-    <div><b>Any system</b>: open a scene in its own full-screen browser window. To let Chrome start the sound without a click, start it with <code>--autoplay-policy=no-user-gesture-required</code>.</div>
+    <div><b>Any system</b>: add <code>?wallpaper</code> to the scene address to keep sound playing while the visible window is out of focus. To let Chrome start sound without a click, start it with <code>--autoplay-policy=no-user-gesture-required</code>.</div>
     <div>The scenes are built to run for days: the frame rate is capped at 30 fps by default, drawing stops while the page is hidden, the resolution adapts to the graphics card, and a lost graphics context is rebuilt.</div>
   </div>
 

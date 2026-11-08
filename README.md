@@ -21,7 +21,7 @@ Open the live gallery or open `index.html` in a local checkout. Serve the checko
 
 - Sound starts when you click or press a key. Browsers do not play sound before that.
 - <kbd>G</kbd> opens the settings. <kbd>F</kbd> or a double-click toggles full screen. <kbd>S</kbd> turns the sound on and off. <kbd>Esc</kbd> closes the settings.
-- The settings set the volume, the music level, the ambience level, the frame rate (15, 30 or 60 fps) and the resolution (automatic, or fixed between 40% and 100%). Each scene keeps its own settings in the browser.
+- The settings set the volume, music, ambient effects, continuous wind or water where present, frame rate (15, 30 or 60 fps) and resolution (automatic, or fixed between 40% and 100%). Each scene keeps its own settings in the browser.
 
 URL options:
 
@@ -31,17 +31,18 @@ URL options:
 | `?scale=0.5` | A fixed resolution, from 0.2 to 1 of the window size. |
 | `?t=600` | Start at this time, in seconds. |
 | `?mute` | No sound. |
+| `?wallpaper` | Keep playing while the page is visible and out of focus. Hidden pages still pause. |
 | `?nohint` | No hint about the sound and the keys. |
 | `?shot` | Draw a few frames and stop, for screenshots. |
 
 ## As a wallpaper
 
-- Windows: [Lively Wallpaper](https://github.com/rocksdanister/lively) (free) can show a web page as the desktop. Add a scene by its address.
-- macOS: [Plash](https://github.com/sindresorhus/Plash) (free) can show a web page as the desktop.
+- Windows: [Lively Wallpaper](https://github.com/rocksdanister/lively) (free) can show a web page as the desktop. Add a scene by its address with `?wallpaper`.
+- macOS: [Plash](https://github.com/sindresorhus/Plash) (free) can show a web page as the desktop. Use a scene address with `?wallpaper`.
 - Any system: open a scene in its own full-screen browser window. The page tries to start the sound at once. Chrome allows that only when it starts with the autoplay switch:
 
 ```
-chrome --autoplay-policy=no-user-gesture-required --kiosk https://sulllll.github.io/infinite-ambient/aurora/
+chrome --autoplay-policy=no-user-gesture-required --kiosk https://sulllll.github.io/infinite-ambient/aurora/?wallpaper
 ```
 
 Wallpaper apps differ in whether they let a page start sound without a click.
@@ -49,11 +50,11 @@ Wallpaper apps differ in whether they let a page start sound without a click.
 ## Running for days
 
 - The frame rate is capped at 30 fps by default. At 15 fps the graphics card does half the work.
-- Drawing stops while the page is hidden. The audio loop keeps playing while the browser keeps the page active.
+- Drawing stops while the page is hidden. Music and effects pause when the page is hidden or loses focus, then resume together when you return. Wallpaper mode also plays while the visible page is out of focus.
 - The automatic resolution keeps the graphics work near a fixed budget: 6 ms per frame, or 8 ms for Dune Sea. It reads the browser's GPU timer (`EXT_disjoint_timer_query_webgl2`). Without that timer, it lowers the resolution when frames come late and never raises it above the scene's default.
 - Travel wraps at the scene's world period, and every slow motion is a closed loop. The numbers sent to the GPU stay small, so the picture never degrades.
 - A lost graphics context is rebuilt. If the browser does not give it back within 15 seconds, the page reloads.
-- Each scene downloads and decodes one soundtrack. One Web Audio source loops it in memory without fetching again at the seam.
+- Each scene downloads and decodes its soundtrack and effects once. The browser loops both in memory on the same audio clock.
 
 Graphics work per frame, measured with the GPU timer on Intel Arc 140V integrated graphics (Chrome on Windows):
 
@@ -69,6 +70,8 @@ Graphics work per frame, measured with the GPU timer on Intel Arc 140V integrate
 ## Music
 
 We extracted an audio excerpt from each video below. SheetSage2 transcribed each melody, and [YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B) generated a new instrumental arrangement. The published FLAC files contain the new arrangements with a crossfade at the loop seam. The tracks are level-matched near −18.7 LUFS before the volume controls.
+
+Synthesized effects enter in quieter passages of each score. Listen for ice rings in Aurora Drift, pressure swells in Abyss, sand brushing in Dune Sea, and distant glints in Nebula Drift.
 
 | Scene | Classical reference | Source recording and credit |
 |---|---|---|
@@ -101,7 +104,7 @@ index.html           the gallery
 shared/scene.js      the runtime: WebGL 2, frame rate, automatic resolution, settings panel, sound
 shared/music.js      the earlier procedural music engine for offline rendering
 shared/style.css     styles for the settings panel and the hint
-audio/               the four FLAC loops served by GitHub Pages
+audio/               the soundtrack and effects loops served by GitHub Pages
 <scene>/index.html   one page for each scene
 <scene>/scene.js     the scene: its settings, its score and its fragment shader
 thumbs/              pictures for the gallery
@@ -116,7 +119,7 @@ Copy a scene folder and change its `scene.js`. A scene calls `InfiniteScene({ ..
 - `speed`: the travel in units per second. `period`: the world period, a size at which every noise scale in the scene repeats.
 - `loops`: four loop lengths in seconds for the slow motions. The shader reads them as `uLoop`, each from 0 to 1.
 - `scale`, `scaleMin`, `scaleMax`, `gpuBudget`: the default resolution, its limits and the budget in milliseconds per frame.
-- `bed`: the optional ambience noise. Place the level-matched soundtrack at `audio/<id>-yue2.flac`.
+- `bed`: the optional ambience noise. Place the level-matched soundtrack at `audio/<id>-yue2.flac` and the optional matching-length effects loop at `audio/<id>-effects.flac`.
 - `frag`: the body of the GLSL fragment shader. The runtime adds helpers for noise, stars, the view ray and tone mapping.
 
 The GLSL sits inside a JavaScript template literal, so it must not contain a backtick, not even in a comment.
