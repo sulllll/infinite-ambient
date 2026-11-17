@@ -1,10 +1,15 @@
 // ============================================================================
 // audio: procedural underwater ambience (no sample files)
 // ============================================================================
-// A fixed Web Audio graph, built on the first click / key / touch and driven by a 10 Hz timer, not the frame loop.
-// Layers: rumble, surface wash, water rush (follows camera speed), drone, bubbles, chimes and distant whale calls.
-let AC, OUT, muted = false;
-const VOL = 0.78; // master level: about -18.5 LUFS, peaks near -5.5 dBFS
+// A fixed Web Audio graph, built at once (or on the first click / key / touch where the browser asks for one) and
+// driven by a 10 Hz timer, not the frame loop. Layers: rumble, surface wash, water rush (follows camera speed),
+// drone, bubbles, chimes and distant whale calls.
+// The settings panel sets four levels, as in the other Infinite Ambient scenes: the volume, music (drone and chimes),
+// ambient effects (bubbles and whale calls) and water (rumble, wash and rush). At the default levels the balance is
+// the original one, as loud as the other scenes. Sound pauses while the page is hidden or out of focus (?wallpaper:
+// only while hidden).
+let AC, OUT, MUS, FXB, BED;
+const VOL = 0.78; // master level at full volume: about -18.5 LUFS, peaks near -5.5 dBFS
 function mkSound(ac) {
   const sr = ac.sampleRate;
   // node of class C with options o, connected to every node / param in `to`; sources start at once
@@ -20,18 +25,21 @@ function mkSound(ac) {
 
   const lim = N(DynamicsCompressorNode, { threshold: -6, knee: 6, ratio: 20, attack: 0.003, release: 0.3 }, ac.destination);
   const out = OUT = G(0, lim), wet = N(ConvolverNode, { buffer: ir }, out);
+  // one level per settings slider; each sends to the reverb after its level, so the reverb follows it
+  const bus = (send) => { const g = G(0, out); if (send) g.connect(G(send, wet)); return g; };
+  MUS = [bus(1.5), bus(1.2)]; FXB = [bus(0.12), bus(2)]; BED = bus(0);
   const src = (playbackRate, ...to) => N(AudioBufferSourceNode, { buffer: nb, loop: true, playbackRate }, ...to);
   // rumble
-  const rum = G(0.34, out); src(1, BQ('lowpass', 150, 0.7, rum)); lfo(0.07, 0.11, rum.gain); lfo(0.113, 0.08, rum.gain);
+  const rum = G(0.34, BED); src(1, BQ('lowpass', 150, 0.7, rum)); lfo(0.07, 0.11, rum.gain); lfo(0.113, 0.08, rum.gain);
   // surface wash + water rush: the same noise played at another speed, so the loops never line up
-  const wash = G(0.25, out), wave = G(1, wash), rush = G(0, out), rushF = BQ('bandpass', 300, 0.9, rush);
+  const wash = G(0.25, BED), wave = G(1, wash), rush = G(0, BED), rushF = BQ('bandpass', 300, 0.9, rush);
   src(0.63, BQ('bandpass', 420, 0.5, wave), rushF); lfo(0.09, 0.3, wave.gain); lfo(0.151, 0.25, wave.gain);
   // drone: stacked fifths on D, each note a pair of slightly detuned sines that slowly beat
-  const pad = G(1, out, G(1.5, wet));
+  const pad = MUS[0];
   [73.42, 110, 164.81, 246.94, 369.99].forEach((f, i) => { const g = G(0.022 - i * 0.003, pad); N(OscillatorNode, { frequency: f }, g); N(OscillatorNode, { frequency: f + rr(0.03, 0.11) }, g); });
-  // pooled voices: oscillator -> envelope -> pan -> dry + reverb
-  const pool = (n, send, type) => Array.from({ length: n }, () => { const p = N(StereoPannerNode, {}, out, G(send, wet)), g = G(0, p); return { p, g, o: N(OscillatorNode, { type }, g) }; });
-  const bub = pool(4, 0.12), chime = pool(3, 1.2), whale = pool(2, 2, 'triangle');
+  // pooled voices: oscillator -> envelope -> pan -> their level (dry + reverb)
+  const pool = (n, to, type) => Array.from({ length: n }, () => { const p = N(StereoPannerNode, {}, to), g = G(0, p); return { p, g, o: N(OscillatorNode, { type }, g) }; });
+  const bub = pool(4, FXB[0]), chime = pool(3, MUS[1]), whale = pool(2, FXB[1], 'triangle');
   // one note: pitch glides f0 -> f1 over dur, level rises to vol in att then dies away
   const play = (vs, t, f0, f1, dur, vol, att) => {
     const v = vs.shift(), f = v.o.frequency, g = v.g.gain; vs.push(v);
@@ -41,7 +49,7 @@ function mkSound(ac) {
   };
   const NOTES = [0, 2, 5, 7, 9, 12, 14, 17, 19]; // D major pentatonic, in semitones above A4
   let lt = ac.currentTime, tB = lt + 1.5, tC = lt + 5, tW = lt + 12, lx = F[CX], ly = F[CY], lz = F[CZ];
-  out.gain.setTargetAtTime(VOL, lt, 1);
+  levels(1);
   return () => {
     const now = ac.currentTime, t = now + 0.05, dt = now - lt;
     if (dt <= 0) return;
@@ -62,10 +70,43 @@ function mkSound(ac) {
     }
   };
 }
-// called on every click / key / touch: builds the graph once and resumes it when the browser allows
-function sound() {
-  if (!AC) { AC = new AudioContext({ latencyHint: 'playback' }); setInterval(mkSound(AC), 100); }
-  if (AC.state === 'suspended' && !document.hidden) AC.resume();
+// the panel's levels: the volume and music follow the other scenes; effects and water are the original mix at 60% and 50%
+function levels(fade) {
+  if (!OUT) return;
+  const now = AC.currentTime, k = fade || 0.15;
+  OUT.gain.setTargetAtTime(S.sound && !MUTE ? VOL * S.volume * S.volume : 0, now, k);
+  for (const g of MUS) g.gain.setTargetAtTime(S.music * S.music / 0.49, now, 0.3);
+  for (const g of FXB) g.gain.setTargetAtTime(S.effects / 0.6, now, 0.3);
+  BED.gain.setTargetAtTime(S.bed * S.bed * 4, now, 0.3);
 }
-const mute = () => { muted = !muted; OUT.gain.setTargetAtTime(muted ? 0 : VOL, AC.currentTime, 0.08); };
-document.addEventListener('visibilitychange', () => { if (AC) document.hidden ? AC.suspend() : AC.resume(); });
+let pageOn = true;
+const canPlay = () => pageOn && !document.hidden && (WALL || document.hasFocus());
+const live = () => !!AC && AC.state === 'running' && S.sound && !MUTE && canPlay();
+// builds the graph once and resumes it where the browser allows; called at start and on every click / key / touch
+function sound() {
+  if (!S.sound || MUTE || !canPlay() || !window.AudioContext) return;
+  if (!AC) { AC = new AudioContext({ latencyHint: 'playback' }); setInterval(mkSound(AC), 100); AC.addEventListener('statechange', sync); }
+  if (AC.state !== 'running') AC.resume().then(() => { if (!S.sound || !canPlay()) pause(); sync(); }, () => {});
+  levels(1.5);
+}
+const pause = () => { if (AC && AC.state === 'running') AC.suspend().then(sync, () => {}); };
+function setSound(on) {
+  S.sound = on; saveS();
+  if (on) sound();
+  else if (AC) { levels(0.3); setTimeout(() => { if (!S.sound) pause(); }, 1500); }
+  sync();
+}
+IA.levels = () => levels(); IA.sound = setSound; IA.live = live;
+const gesture = (e) => { if (e.type === 'keydown' && (e.key.toLowerCase() === 's' || e.code === 'KeyM')) return; if (!live()) sound(); };
+addEventListener('pointerdown', gesture, true);
+addEventListener('keydown', gesture, true);
+const follow = () => (canPlay() ? sound() : pause());
+document.addEventListener('visibilitychange', follow);
+addEventListener('focus', follow);
+addEventListener('blur', () => { if (!WALL) pause(); });
+addEventListener('pagehide', () => { pageOn = false; pause(); });
+addEventListener('pageshow', () => { pageOn = true; follow(); });
+// Some browsers allow sound without a click, for example Chrome started with
+// --autoplay-policy=no-user-gesture-required as a kiosk or wallpaper.
+sound();
+sync();

@@ -46,7 +46,7 @@ footer { margin-top: 44px; color: var(--soft); font-size: 13px; }
 <body>
 <main>
   <h1>Infinite Ambient</h1>
-  <p class="lede">Endless scenes that you drift through. Each has an instrumental soundtrack adapted from a classical recording. The music loops in the browser and the scenes can stay on all day as a live wallpaper.</p>
+  <p class="lede">Endless scenes that you drift through. Each has its own instrumental soundtrack, most of them adapted from a classical recording. The music loops in the browser and the scenes can stay on all day as a live wallpaper.</p>
 
   <div class="grid">
     <a class="card" href="aurora/index.html">
@@ -79,6 +79,15 @@ footer { margin-top: 44px; color: var(--soft); font-size: 13px; }
         <h2>Nebula Drift</h2>
         <p>Through the clouds between the stars.</p>
         <p class="music">Slowly overlapping tones after Pachelbel’s <i>Canon in D</i>.</p>
+      </div>
+    </a>
+    <a class="card" href="garden/index.html">
+      <img src="thumbs/garden.jpg" width="640" height="360" alt="A stone whale tail rising from the seabed between kelp, with a school of fish in blue water">
+      <div class="body">
+        <h2>Abyssal Garden</h2>
+        <p>Kelp forests, a stone whale tail and a sunken ship.</p>
+        <p class="music">A live soundscape: a deep drone, soft chimes and distant whale calls.</p>
+        <p class="from">Adapted from Noniv/abyssal-garden (MIT) &middot; needs WebGPU: Chrome or Edge</p>
       </div>
     </a>
     <a class="card" href="https://sulllll.github.io/Nightscape/">
@@ -114,6 +123,7 @@ footer { margin-top: 44px; color: var(--soft); font-size: 13px; }
     <div><b>Sound</b> starts when you click or press a key. Browsers do not play sound before that.</div>
     <div><kbd>G</kbd> settings &middot; <kbd>F</kbd> or a double-click for full screen &middot; <kbd>S</kbd> sound on and off &middot; <kbd>Esc</kbd> closes the settings</div>
     <div>The settings panel has separate levels for music and ambient effects, plus display controls. Each scene remembers its own settings. Sound pauses when you leave the scene.</div>
+    <div>In <b>Abyssal Garden</b>, <kbd>Enter</kbd> lets you swim freely: <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> and the mouse. <kbd>Esc</kbd> goes back to the drift.</div>
   </div>
 
   <h3>As a wallpaper</h3>
@@ -124,7 +134,7 @@ footer { margin-top: 44px; color: var(--soft); font-size: 13px; }
     <div>The scenes are built to run for days: the frame rate is capped at 30 fps by default, drawing stops while the page is hidden, the resolution adapts to the graphics card, and a lost graphics context is rebuilt.</div>
   </div>
 
-  <footer>Made with WebGL 2 and the Web Audio API. <a href="https://github.com/sulllll/infinite-ambient#music">Soundtrack credits</a> · <a href="https://github.com/sulllll/infinite-ambient">Source on GitHub</a></footer>
+  <footer>Made with WebGL 2, WebGPU and the Web Audio API. <a href="https://github.com/sulllll/infinite-ambient#music">Soundtrack credits</a> · <a href="https://github.com/sulllll/infinite-ambient">Source on GitHub</a></footer>
 </main>
 </body>
 </html>

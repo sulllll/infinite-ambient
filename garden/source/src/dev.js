@@ -1,9 +1,10 @@
 // ============================================================================
 // development tools: only in dev.html (npm run build:dev), never in index.html
 // ============================================================================
-//   F    fly the camera along the scripted path (FLY in main.js), one minute through the whole world
+//   V    fly the camera along the scripted path (FLY in main.js), one minute through the whole world
 //   B    the same flight as a benchmark: the resolution stays fixed, every frame is timed, the result is shown at the end
-//   F, B or 1-6 during a flight stop it
+//   V, B or 1-6 during a flight stop it
+// (F is full screen in Infinite Ambient, so the flight is on V here.)
 {
   const LOGN = 1 << 16, logFrame = new Float32Array(LOGN), logGpu = new Float32Array(LOGN);
   let flying = false, bench = false, last = 0, nFrame = 0, nGpu = 0;
@@ -26,8 +27,8 @@
     draw();
   };
   addEventListener('keydown', (e) => {
-    if (menu || e.repeat) return;
-    if (e.code === 'KeyF' || e.code === 'KeyB') {
+    if (e.repeat) return;
+    if (e.code === 'KeyV' || e.code === 'KeyB') {
       if (flying) stop();
       else {
         flying = true; bench = e.code === 'KeyB'; F[FLT] = 0; last = F[LAST]; nFrame = nGpu = 0;

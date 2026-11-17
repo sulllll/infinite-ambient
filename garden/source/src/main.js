@@ -3,11 +3,11 @@
 // ============================================================================
 const $ = (id) => document.getElementById(id);
 const canvas = $('c'), info = $('i'), body = document.body;
-// a phone held upright gets the page turned on its side (see template.html)
-const rot = matchMedia('(orientation:portrait) and (pointer:coarse)');
+// touch axes as on an upright page (the original turns phones to landscape; Infinite Ambient pages do not)
+const rot = { matches: false };
 // loading bar: each stage glides it to `to` (the share done) over ~`ms` on the compositor, so it moves while this
 // thread is busy
-let loaded = 0, dead; // dead: the graphics device was lost
+let loaded = 0, dead, ranAt = 0; // dead: the graphics device was lost; ranAt: when the frames started
 const say = (m, to, ms) => {
   if (!dead) $('s').textContent = m;
   const a = $('b').animate({ transform: [`scaleX(${loaded})`, `scaleX(${to})`] }, { duration: ms, fill: 'forwards', easing: 'cubic-bezier(.3,.5,.5,1)' });
@@ -23,11 +23,13 @@ $('w').hidden = !!navigator.userAgentData; // only Chromium-based browsers have 
 const hasTS = adapter.features.has('timestamp-query');
 const device = await adapter.requestDevice({ requiredFeatures: hasTS ? ['timestamp-query'] : [] });
 device.addEventListener('uncapturederror', (e) => console.error('GPU: ' + e.error.message));
-// out of memory or a GPU timeout: reload a level lower, or on Low say what happened
+// After a long run (a driver update, the computer waking up) start again at the same level. Early on it is out of
+// memory or a GPU timeout: reload a level lower, or on Low say what happened.
 device.lost.then((l) => {
   if (l.reason === 'destroyed') return; // the page is closing
-  if (LV < 2) { keep('abyssal', LV + 1); location.reload(); }
-  dead = body.className = 'l e'; $('s').textContent = 'The graphics device was lost. Reload the page to try again.';
+  if (ranAt && performance.now() - ranAt > 60e3) { setTimeout(() => location.reload(), 3e3); return; }
+  if (LV < 2) { keep(KQ, LV + 1); location.reload(); return; }
+  dead = 1; body.classList.add('l', 'e'); canvas.classList.remove('on'); $('s').textContent = 'The graphics device was lost. Reload the page to try again.';
 });
 const ctx = canvas.getContext('webgpu'), FMT = navigator.gpu.getPreferredCanvasFormat();
 const Q = device.queue, HDR = 'rgba16float', DEPTH = 'depth32float';
@@ -143,8 +145,8 @@ const SUN = (() => { const v = [0.27, 1, -0.24], l = hypot(...v); return v.map((
 // ---------------------------------------------------------------- world generation
 await say('Sculpting the seabed…', 0.25, 1200);
 // marks a load in progress (quality.js); leaving the page before it ends is not a crash
-keep('abyssalLoad', 1);
-addEventListener('pagehide', () => keep('abyssalLoad', ''));
+keep(KL, 1);
+addEventListener('pagehide', () => keep(KL, ''));
 let D;
 {
   const prims = primBuffer();
@@ -235,6 +237,8 @@ const flyPts = [];
 // per-frame float state lives in one preallocated array, so the frame loop allocates no heap numbers
 const F = new Float64Array(32), P6 = new Float64Array(6);
 const CX = 0, CY = 1, CZ = 2, YAW = 3, PIT = 4, FX = 5, FY = 6, FZ = 7, RX = 8, RZ = 9, UX = 10, UY = 11, UZ = 12, VX = 13, VY = 14, VZ = 15, TIME = 16, FLT = 17, LAST = 18, GPU = 19, HUDT = 20, SPL = 21, MX = 22, MY = 23, MZ = 24;
+// Infinite Ambient: last animation frame, average time between them, drift time, smoothed pointer x and y
+const RAF = 25, RAA = 26, DRT = 27, LKX = 28, LKY = 29;
 // aim the camera from P6 = position + look-at point
 function aim() {
   const dx = P6[3] - P6[0], dy = P6[4] - P6[1], dz = P6[5] - P6[2];
@@ -265,6 +269,62 @@ function flyAt() {
 }
 for (let t = 0; t <= FLYT; t += 0.1) { F[FLT] = t; flyAt(); flyPts.push([F[CX], F[CY], F[CZ]]); }
 for (const p of POSES) flyPts.push([p[0], -40, p[2]]);
+
+// ---------------------------------------------------------------- endless drift (Infinite Ambient)
+// A closed loop through every part of the world: up the canyon past the whale fluke, through the kelp basin, down
+// the sponge canyon, round the purple grotto, up the canyon again over the stone arch, and past the wreck. A closed
+// Catmull-Rom curve through these points, travelled at a constant speed once every LOOPT seconds. It was checked
+// against the rock and the whale fluke: the camera stays at least 2 m from both all the way round. The world
+// generator keeps plants out of its way, as it does for FLY.
+const LOOP = new Float32Array([
+  0, -40, 34, -12, -40, 18, -14, -40, 9, -13, -39, -3, -8, -37.5, -18, -9, -37.5, -36, -8, -38, -54,
+  -14, -37.5, -76, -29, -38, -90, -41, -38, -70, -53, -38, -50, -58, -38, -28, -57, -38, -10, -60, -38, 10, -52, -37.5, 36,
+  -22, -38, 43, -6, -39, 44.5, 2, -40, 56, 2, -40.5, 70,
+  0, -39.5, 88, 2, -39, 102, 12, -38.5, 106, 18, -38, 96, 11, -37, 80, 9, -36, 64, 12, -37.5, 50,
+  14, -38.5, 30, 11, -36.5, 12, 7, -33, -8, 7, -32, -24, 8, -33, -40, 10, -35, -54,
+  20, -35.5, -66, 32, -34, -70, 50, -31, -44, 58, -33, -12, 55, -38, 20, 50, -38.5, 35, 38, -36.5, 46, 22, -37, 40,
+]);
+const LOOPN = LOOP.length / 3, LOOPT = 360, LLN = 2048, loopLUT = new Float32Array(LLN + 1);
+// position on the loop at spline parameter s (0..LOOPN), into P6[o..o+2]
+function loopPos(s, o) {
+  let i = floor(s); const u = s - i; i = (i % LOOPN + LOOPN) % LOOPN;
+  const i0 = (i + LOOPN - 1) % LOOPN * 3, i1 = i * 3, i2 = (i + 1) % LOOPN * 3, i3 = (i + 2) % LOOPN * 3;
+  for (let k = 0; k < 3; k++) {
+    const a = LOOP[i0 + k], b = LOOP[i1 + k], c = LOOP[i2 + k], d = LOOP[i3 + k];
+    P6[o + k] = 0.5 * (2 * b + (c - a) * u + (2 * a - 5 * b + 4 * c - d) * u * u + (3 * b - a - 3 * c + d) * u * u * u);
+  }
+}
+// spline parameter at fraction f of the loop's length
+const loopS = (f) => { f = (f - floor(f)) * LLN; const k = floor(f) | 0; return loopLUT[k] + (loopLUT[k + 1] - loopLUT[k]) * (f - k); };
+let loopLen = 0;
+{ // arc-length table, as for FLY
+  const M = 8192, len = new Float64Array(M + 1);
+  loopPos(0, 0);
+  for (let k = 1; k <= M; k++) { const px = P6[0], py = P6[1], pz = P6[2]; loopPos(k / M * LOOPN, 0); len[k] = len[k - 1] + hypot(P6[0] - px, P6[1] - py, P6[2] - pz); }
+  loopLen = len[M];
+  for (let k = 0, j = 0; k <= LLN; k++) { const d = k / LLN * len[M]; while (j < M - 1 && len[j + 1] < d) j++; loopLUT[k] = (j + (d - len[j]) / max(len[j + 1] - len[j], 1e-6)) / M * LOOPN; }
+}
+flyPts.drift = [];
+for (let k = 0; k < 400; k++) { loopPos(loopS(k / 400), 0); const q = [P6[0], P6[1], P6[2]]; flyPts.push(q); flyPts.drift.push(q); }
+// things worth a look on the way: x, y, z, pull. The gaze turns towards one as it comes near and ahead.
+const POI = new Float32Array([-5, -37, -4, 1, 59.5, -25, 6, 1, 19, -22, -15, 0.45, 0, -31, -34, 0.5]);
+// the drifting camera at drift time F[DRT], turned a little by slow sways and the pointer
+function driftCam() {
+  const f = F[DRT] / LOOPT;
+  loopPos(loopS(f), 0); loopPos(loopS(f + 16 / loopLen), 3);
+  const x = P6[0], y = P6[1], z = P6[2];
+  let dx = P6[3] - x, dy = P6[4] - y, dz = P6[5] - z; const l = sqrt(dx * dx + dy * dy + dz * dz); dx /= l; dy /= l; dz /= l;
+  let lx = dx, ly = dy * 0.5, lz = dz;
+  for (let i = 0; i < POI.length; i += 4) {
+    let px = POI[i] - x, py = POI[i + 1] - y, pz = POI[i + 2] - z; const d = sqrt(px * px + py * py + pz * pz); px /= d; py /= d; pz /= d;
+    const w = POI[i + 3] * sstep(42, 16, d) * sstep(-0.1, 0.6, px * dx + py * dy + pz * dz);
+    lx += px * w; ly += py * w; lz += pz * w;
+  }
+  const t = F[DRT];
+  F[CX] = x; F[CY] = y; F[CZ] = z;
+  F[YAW] = atan2(lx, -lz) + 0.08 * sin(TAU * t / 71) + 0.14 * F[LKX];
+  F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz)) + 0.05 + 0.06 * sin(TAU * t / 53) - 0.09 * F[LKY];
+}
 
 await say('Growing kelp…', 0.73, 2500);
 const Wd = makeWorld(D, T, flyPts, POSES);
@@ -329,14 +389,16 @@ Wd.glints = Wd.volD = Wd.gm = T.vb = T.ib = T.wp = T.wn = 0;
 
 // ---------------------------------------------------------------- render targets (rebuilt on resize)
 // The scene is drawn at `pix` pixels and scaled up to the window. frame() tunes it and the draw distance scale `det`
-// for 60 fps; both start where the last visit left them.
-const PIXMAX = 2560 * 1440, PIXMIN = mob ? 25e4 : 5e5, DETMIN = 0.4;
+// to keep the graphics work near BUDGET ms a frame at the chosen frame rate; both start where the last visit left
+// them. A fixed resolution (the settings, or ?scale) is a share of the window's width and height, at full distance.
+const PIXMAX = 2560 * 1440, PIXMIN = mob ? 25e4 : 35e4, DETMIN = 0.4, BUDGET = 8;
 let W = 0, H = 0, DW = 0, DH = 0, pix = +SV[1] || (LV > 1 ? 41e4 : mob ? 1280 * 720 : PIXMAX), det = +SV[2] || 1, dynN = 0, dynT = 0, dynG = 0, dynGN = 0, dynBad = 0, dynOk = 0, dynWait = 3;
 let passScene, passRays, passBlur, bgBlur, passPost, bgRays, bgPost, bloomPass = [], bloomBG = [], targets = [];
 const NB = 6;
+const fixedRes = () => FIXED || S.quality / 100;
 function resize() {
   DW = max(2, round(canvas.clientWidth * devicePixelRatio)); DH = max(2, round(canvas.clientHeight * devicePixelRatio));
-  const s = min(1, sqrt(pix / (DW * DH)));
+  const s = fixedRes() || min(1, sqrt(pix / (DW * DH)));
   const w = max(2, round(DW * s) & ~1), h = max(2, round(DH * s) & ~1);
   if (w === W && h === H) return;
   dynN = dynG = dynGN = 0; dynT = -300; // let the new size settle before measuring again
@@ -366,8 +428,10 @@ function resize() {
   for (let i = NB - 1; i > 0; i--) { bloomPass.push({ colorAttachments: [colorAtt(vBl[i - 1], false)] }); bloomBG.push(blitBG(vBl[i])); }
   UB[52] = W; UB[53] = H; UB[54] = 1 / W; UB[55] = 1 / H;
 }
+if (fixedRes()) det = 1;
 resize();
 addEventListener('resize', resize);
+IA.res = () => { if (fixedRes()) det = 1; dynOk = dynBad = 0; resize(); };
 
 // ---------------------------------------------------------------- timing (GPU timestamp queries)
 let qs, qResolve, qRead = [], tsBegin, tsEnd;
@@ -528,30 +592,47 @@ function collide() {
   }
 }
 
+// Infinite Ambient: the frame rate is capped (S.fps), the camera drifts along LOOP unless you swim, and time wraps
+// every WRAP seconds behind a short fade, so the numbers sent to the GPU stay small when it runs for days.
+const WRAP = 4 * 3600;
+let first = true, drawn = 0, frames = 0, fading = false;
+// fade the scene out, do `fn` while it is dark, and fade back in
+function dip(fn) {
+  if (fading) return;
+  fading = true; canvas.classList.add('dip');
+  setTimeout(() => { fn(); fading = false; canvas.classList.remove('dip'); }, SHOT ? 0 : 900);
+}
 function frame(now) {
+  if (SHOT && drawn >= 4) return; // screenshots: a few frames at the given time, then stop
   requestAnimationFrame(frame);
-  const dtr = now - F[LAST]; F[LAST] = now;
-  let dt = dtr / 1000; if (dt > 0.1) dt = 0.1;
-  // Dynamic resolution for 60 fps: every second (0.4 s behind the menu) scale the load by k
-  if (dtr < 1e3 && (dynT += dtr) > 0 && (dynN++, dynT > (menu ? 400 : 1000))) {
-    const a = dynT / dynN, g = dynGN ? dynG / dynGN : 0; let k = 1;
-    // with GPU timing: keep it between 9.8 and 13.6 ms
-    if (g) { if (g > 13.6 || g < 9.8) k = 11.7 / g; }
-    // without: slow for two periods in a row means fewer pixels, and twice as long before trying to go back up
-    else if (a > 17.6) { dynOk = 0; if (++dynBad > 1) { k = 15 / a; dynBad = 0; dynWait = min(dynWait * 2, 60); } }
-    // at the display's rate there is no telling if there is room, so try a little more now and then
-    else { dynBad = 0; if (a < 12.5) k = 15 / a; else if (++dynOk > dynWait) { k = 1.17; dynOk = 0; } }
+  const raf = now - F[RAF]; F[RAF] = now; if (raf < 100) F[RAA] += (raf - F[RAA]) * 0.05;
+  const minDt = 1000 / S.fps, dtr = now - F[LAST];
+  if (!first && dtr < minDt - 3) return;
+  first = false; F[LAST] = now; drawn++; frames++;
+  let dt = SHOT ? 0 : dtr / 1000; if (dt > 0.1) dt = 0.1;
+  // Automatic resolution, checked every two seconds: frames that come late step it down. With a GPU timer it keeps
+  // the work near BUDGET ms a frame (per frame, so 15 fps really does halve the load). Without one: slow for two
+  // checks in a row means fewer pixels, and twice as long before it tries a little more again.
+  if (!fixedRes() && !SHOT && dtr < 1e3 && (dynT += dtr) > 0 && (dynN++, dynT > 2000)) {
+    const a = dynT / dynN, g = dynGN ? dynG / dynGN : 0, expect = max(minDt, Math.ceil((minDt - 3) / F[RAA]) * F[RAA]); let k = 1;
+    if (a > expect * 1.3) { k = expect / a; dynOk = 0; }
+    else if (g) { if (g > BUDGET * 1.16 || (g < BUDGET * 0.84 && a < expect * 1.1)) k = BUDGET / g; }
+    else if (a > expect * 1.1) { dynOk = 0; if (++dynBad > 1) { k = expect / a; dynBad = 0; dynWait = min(dynWait * 2, 60); } }
+    else { dynBad = 0; if (++dynOk > dynWait) { k = 1.17; dynOk = 0; } }
     k = k < 0.5 ? 0.5 : k > 1.7 ? 1.7 : k; const top = min(PIXMAX, DW * DH), mid = max(top / 2, PIXMIN), was = pix + det;
     // too slow: pixels down to `mid` first, then draw distance, then the remaining pixels; faster goes back the same way
     if (k < 1 ? pix > mid || det <= DETMIN : pix < mid || det >= 1) {
       const end = k < 1 ? (det > DETMIN ? mid : PIXMIN) : det < 1 ? mid : top;
       pix *= k; if (k < 1 ? pix < end : pix > end) pix = end;
     } else { det *= sqrt(k); det = det < DETMIN ? DETMIN : det > 1 ? 1 : det; }
-    if (was !== pix + det) keep('abyssal', [LV, pix < top ? pix | 0 : '', det]); // nothing kept at full resolution
+    if (was !== pix + det) keep(KQ, [LV, pix < top ? pix | 0 : '', det]); // nothing kept at full resolution
     dynN = dynT = dynG = dynGN = 0; resize();
   }
   F[TIME] += dt;
-  {
+  if (F[TIME] > WRAP) dip(() => { F[TIME] -= WRAP; });
+  const kp = min(1, dt * 1.2); F[LKX] += (lookT[0] - F[LKX]) * kp; F[LKY] += (lookT[1] - F[LKY]) * kp;
+  if (!swim) { F[DRT] += dt; driftCam(); }
+  else {
     // touch: holding the finger away from where it went down keeps turning, like a joystick
     if (tId >= 0) {
       const tr = 4 / (innerWidth < innerHeight ? innerWidth : innerHeight); let jx = (tx - tx0) * tr, jy = (ty - ty0) * tr;
@@ -579,29 +660,28 @@ function frame(now) {
   }
 }
 
-// ---------------------------------------------------------------- input
+// ---------------------------------------------------------------- input (swimming)
 const key = (e, v) => {
   switch (e.code) {
     case 'KeyW': kf = v; break; case 'KeyS': kb = v; break; case 'KeyA': kl = v; break; case 'KeyD': kr = v; break;
     case 'KeyE': ku = v; break; case 'KeyQ': kd = v; break; case 'ShiftLeft': case 'ShiftRight': ks = v; break;
-    default: if (v && !e.repeat) {
-      if (e.code === 'KeyH') { hud = !hud; hTot = 0; hPer = 1e9; info.textContent = ''; }
-      else if (e.code === 'KeyM') mute();
-      else if (e.code === 'Escape') ui(true);
-      else if (e.code >= 'Digit1' && e.code <= 'Digit6') lookAt(...POSES[e.code.charCodeAt(5) - 49]);
-    }
+    default: if (v && !e.repeat && e.code >= 'Digit1' && e.code <= 'Digit6') lookAt(...POSES[e.code.charCodeAt(5) - 49]);
   }
 };
-// behind the menu only the stats and mute keys work
-addEventListener('keydown', (e) => { if (menu && e.code !== 'KeyH' && e.code !== 'KeyM') return; sound(); key(e, 1); });
+// H shows the stats line at any time; the swimming keys only work while you swim
+addEventListener('keydown', (e) => {
+  if (e.code === 'KeyH' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && e.target.tagName !== 'INPUT') { hud = !hud; hTot = 0; hPer = 1e9; info.textContent = ''; }
+  if (swim) key(e, 1);
+});
 addEventListener('keyup', (e) => key(e, 0));
 const release = () => { kf = kb = kl = kr = ku = kd = ks = 0; tId = -1; tN = 0; };
-const capture = () => { sound(); const p = canvas.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => canvas.requestPointerLock()).catch(() => 0); };
-canvas.addEventListener('click', capture);
+const capture = () => { const p = canvas.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => canvas.requestPointerLock()).catch(() => 0); };
+canvas.addEventListener('click', () => { if (swim && !mob && !document.pointerLockElement) capture(); });
 addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas) { mdx += e.movementX; mdy += e.movementY; } });
 addEventListener('blur', release);
 const touch = (e) => {
-  e.preventDefault(); sound(); tN = e.touches.length;
+  if (!swim) return;
+  e.preventDefault(); tN = e.touches.length;
   let f = null, first = false; for (let i = 0; i < tN; i++) if (e.touches[i].identifier === tId) f = e.touches[i];
   if (!f) { tId = -1; if (tN) { f = e.touches[0]; tId = f.identifier; first = true; } }
   if (f) {
@@ -613,31 +693,45 @@ const touch = (e) => {
 };
 for (const n of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) canvas.addEventListener(n, touch, { passive: false });
 
-// ---------------------------------------------------------------- menu
-// The scene keeps rendering (blurred by CSS) behind the menu. Esc, losing the mouse or the corner button open it.
-let menu = true;
-const bDive = $('d');
-const ui = (m) => {
-  if (dead) return;
-  menu = m; body.className = m ? 'm' : document.pointerLockElement ? 'g p' : 'g';
-  // focus the dive button so Enter works (delayed: it can't take focus while still hidden)
-  if (m) { release(); setTimeout(() => menu && bDive.focus(), 100); } else document.activeElement.blur();
-};
-const go = () => {
-  sound(); ui(false); bDive.textContent = 'Resume';
-  // phones: go fullscreen and ask for landscape; where that is refused the CSS rotation still applies
-  if (mob) document.documentElement.requestFullscreen?.()?.then(() => screen.orientation.lock('landscape')).catch(() => 0);
+// ---------------------------------------------------------------- swim / drift
+// Swimming starts where the drift is and captures the mouse (on a touchscreen: touch controls). Esc, losing the
+// mouse or the settings button goes back: the scene fades out and comes back on the drift where it was left.
+IA.swim = () => {
+  if (swim || dead || fading || body.classList.contains('l')) return;
+  swim = true; release(); mdx = mdy = lkx = lky = l2x = l2y = 0; F[VX] = F[VY] = F[VZ] = 0;
+  body.classList.remove('panel'); body.classList.add('swim'); sync();
   if (!mob) capture();
 };
-bDive.onclick = go; $('o').onclick = () => ui(true);
-// detail buttons: the current level is lit, the others reload the page with theirs
-$('q').querySelectorAll('button').forEach((b, i) => { if (i === 2 - LV) b.className = 'on'; else b.onclick = () => { keep('abyssal', 2 - i); location.reload(); }; });
-document.addEventListener('pointerlockchange', () => ui(!document.pointerLockElement));
+IA.unswim = () => {
+  if (!swim || fading) return;
+  release(); body.classList.remove('swim');
+  if (document.pointerLockElement) document.exitPointerLock();
+  dip(() => { swim = false; sync(); });
+};
+document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && swim && !mob) IA.unswim(); });
+
+// panel statistics, once a second
+setInterval(() => {
+  $('ia-res').textContent = `${W} x ${H} (${W * 100 / DW | 0}%)`;
+  $('ia-rate').textContent = drawn + ' fps';
+  $('ia-gpu').textContent = !hasTS ? 'not measured' : F[GPU] > 0 ? F[GPU].toFixed(1) + ' ms a frame' : '-';
+  drawn = 0;
+}, 1000);
+
+// Hooks for testing: the drift time, swimming, and the resolution in use.
+window.__scene = {
+  get time() { return F[DRT]; }, set time(v) { F[DRT] = F[TIME] = v; }, get clock() { return F[TIME]; }, set clock(v) { F[TIME] = v; },
+  get scale() { return W / DW; }, get det() { return det; }, get gpu() { return F[GPU]; },
+  get cam() { return [F[CX], F[CY], F[CZ], F[YAW], F[PIT]]; }, get frames() { return frames; },
+  swim: () => IA.swim(), unswim: () => IA.unswim(), get swimming() { return swim; },
+  loopLen,
+};
 
 // draw the first frame and wait for the GPU to finish it (pipelines get compiled on first use) before the reveal
-lookAt(...POSES[0]);
+F[DRT] = F[TIME] = T0; driftCam();
 await say('Letting the light in…', 1, 400);
 render(); await Q.onSubmittedWorkDone();
-setTimeout(keep, 15e3, 'abyssalLoad', ''); // the load counts as survived after 15 s of frames
-ui(true);
-requestAnimationFrame((t) => { F[LAST] = t; requestAnimationFrame(frame); });
+setTimeout(keep, 15e3, KL, ''); // the load counts as survived after 15 s of frames
+body.classList.remove('l'); canvas.classList.add('on'); ranAt = performance.now();
+if (!URLQ.has('nohint') && !SHOT) { const h = $('ia-hint'); setTimeout(() => h.classList.add('on'), 1200); setTimeout(() => h.classList.remove('on'), 8000); }
+requestAnimationFrame((t) => { F[LAST] = F[RAF] = t; F[RAA] = 16.7; requestAnimationFrame(frame); });
