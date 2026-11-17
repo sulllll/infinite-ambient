@@ -12,6 +12,9 @@ Live gallery: <https://sulllll.github.io/infinite-ambient/>
 | <img src="thumbs/abyss.jpg" width="240" alt="Glowing jellyfish in deep water"><br>[Abyss](https://sulllll.github.io/infinite-ambient/abyss/) | An endless drift through deep water. Faint shafts of light fall from far above, marine snow streams past, and soft glowing jellies pulse in the dark. | Submerged strings after Bach’s Cello Suite No. 1 prelude. |
 | <img src="thumbs/dunes.jpg" width="240" alt="Sand dunes under a low sun"><br>[Dune Sea](https://sulllll.github.io/infinite-ambient/dunes/) | A low flight over endless sand dunes at the golden hour. The sun rises a little and sinks again over about 32 minutes, so the light moves between gold and dusk. | Sparse, warm tones after Satie’s *Gymnopédie No. 1*. |
 | <img src="thumbs/nebula.jpg" width="240" alt="Clouds of gas between stars"><br>[Nebula Drift](https://sulllll.github.io/infinite-ambient/nebula/) | A slow flight through glowing clouds of gas between the stars. Near stars drift past, and far stars stay on the sky. | Slowly overlapping tones after Pachelbel’s *Canon in D*. |
+| <img src="thumbs/garden.jpg" width="240" alt="A stone whale tail between kelp, with a school of fish"><br>[Abyssal Garden](https://sulllll.github.io/infinite-ambient/garden/) | A six-minute loop through an underwater world: up a canyon past a stone whale tail, through a kelp basin and a sponge canyon, round a purple grotto, over a stone arch and under a sunken ship. Manta rays and fish swim past. Press <kbd>Enter</kbd> to swim freely. | A live soundscape: a deep drone, soft chimes, bubbles and distant whale calls. |
+
+Abyssal Garden is adapted from [Noniv/abyssal-garden](https://github.com/Noniv/abyssal-garden) by Maksymilian Dendura, under the MIT License ([garden/LICENSE](garden/LICENSE)). The world, its look and its soundscape come from the original; a few hand-placed kelp columns are moved out of the drift's path. This repository adds the endless drift, the shared settings panel and keys, the frame rate cap and the rules for running all day. It is drawn with WebGPU, so it needs a current Chrome or Edge. The other scenes need only WebGL 2.
 
 [Nightscape](https://github.com/sulllll/Nightscape) is the first scene of this kind: a flight above a sea of clouds at night, with a felt piano and a soft choir. It lives in its own repository, a fork of WeebLabs/Nightscape with added music. This repository holds only new code. It contains no code or assets from WeebLabs/Nightscape.
 
@@ -22,6 +25,7 @@ Open the live gallery or open `index.html` in a local checkout. Serve the checko
 - Sound starts when you click or press a key. Browsers do not play sound before that.
 - <kbd>G</kbd> opens the settings. <kbd>F</kbd> or a double-click toggles full screen. <kbd>S</kbd> turns the sound on and off. <kbd>Esc</kbd> closes the settings.
 - The settings set the volume, music, ambient effects, continuous wind or water where present, frame rate (15, 30 or 60 fps) and resolution (automatic, or fixed between 40% and 100%). Each scene keeps its own settings in the browser.
+- In Abyssal Garden, <kbd>Enter</kbd> or the settings button starts free swimming: <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> to swim, the mouse to look, <kbd>Q</kbd> and <kbd>E</kbd> down and up, <kbd>Shift</kbd> faster, <kbd>1</kbd> to <kbd>6</kbd> for viewpoints and <kbd>M</kbd> for sound. <kbd>Esc</kbd> goes back to the drift where it left off. Its settings also choose the detail level (Low, Medium or High), and <kbd>H</kbd> shows a line of statistics.
 
 URL options:
 
@@ -51,9 +55,9 @@ Wallpaper apps differ in whether they let a page start sound without a click.
 
 - The frame rate is capped at 30 fps by default. At 15 fps the graphics card does half the work.
 - Drawing stops while the page is hidden. Music and effects pause when the page is hidden or loses focus, then resume together when you return. Wallpaper mode also plays while the visible page is out of focus.
-- The automatic resolution keeps the graphics work near a fixed budget: 6 ms per frame, or 8 ms for Dune Sea. It reads the browser's GPU timer (`EXT_disjoint_timer_query_webgl2`). Without that timer, it lowers the resolution when frames come late and never raises it above the scene's default.
-- Travel wraps at the scene's world period, and every slow motion is a closed loop. The numbers sent to the GPU stay small, so the picture never degrades.
-- A lost graphics context is rebuilt. If the browser does not give it back within 15 seconds, the page reloads.
+- The automatic resolution keeps the graphics work near a fixed budget: 6 ms per frame, or 8 ms for Dune Sea and Abyssal Garden. Abyssal Garden lowers the resolution first and then how far away plants and rocks are drawn. It reads the browser's GPU timer (`EXT_disjoint_timer_query_webgl2`). Without that timer, it lowers the resolution when frames come late and never raises it above the scene's default.
+- Travel wraps at the scene's world period, and every slow motion is a closed loop. The numbers sent to the GPU stay small, so the picture never degrades. In Abyssal Garden the drift is a closed loop, and the clock of the swaying plants and swimming fish starts again every four hours behind a two-second fade.
+- A lost graphics context is rebuilt. If the browser does not give it back within 15 seconds, the page reloads. Abyssal Garden reloads after a lost WebGPU device: at the same detail level after a long run, or one level lower if it happens while loading.
 - Each scene downloads and decodes its soundtrack and effects once. The browser loops both in memory on the same audio clock.
 
 Graphics work per frame, measured with the GPU timer on Intel Arc 140V integrated graphics (Chrome on Windows):
@@ -65,6 +69,8 @@ Graphics work per frame, measured with the GPU timer on Intel Arc 140V integrate
 | Nebula Drift | 2.4 ms | 50% |
 | Dune Sea | 7.8 ms | 55% |
 
+Abyssal Garden has not been measured on this hardware. Its author reports about 180 fps at 2560 × 1440 on an RTX 5070 Ti, at High detail.
+
 672 × 706 pixels is about the pixel count of a 1920 × 1080 screen at 50% resolution. With the automatic resolution at 30 fps, the measured work stayed between 2.5 and 9 ms per frame in every scene.
 
 ## Music
@@ -72,6 +78,8 @@ Graphics work per frame, measured with the GPU timer on Intel Arc 140V integrate
 We extracted an audio excerpt from each video below. SheetSage2 transcribed each melody, and [YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B) generated a new instrumental arrangement. The published FLAC files contain the new arrangements with a crossfade at the loop seam. The tracks are level-matched near −18.7 LUFS before the volume controls.
 
 Synthesized effects enter in quieter passages of each score. Listen for ice rings in Aurora Drift, pressure swells in Abyss, sand brushing in Dune Sea, and distant glints in Nebula Drift.
+
+Abyssal Garden keeps the original's soundscape, synthesized live in the browser with no recording. The music slider sets the drone and chimes, the ambient effects slider the bubbles and whale calls, and the water slider the rumble and wash.
 
 Aurora Drift and Dune Sea also have two quiet bursts of simulated cockpit radio per loop. Each exchange lasts under one second and sits on the ambient effects slider.
 
@@ -92,6 +100,16 @@ node tools/render-music.cjs aurora 900 48000 7 aurora.wav
 ```
 
 The arguments are the scene, the length in seconds, the sample rate, the seed and the output file. Only the scene is required.
+
+`garden/source` holds the readable source of Abyssal Garden. To rebuild `garden/index.html` after a change (Node.js 18 or newer):
+
+```
+cd garden/source
+npm install
+npm run build
+```
+
+`npm run build:readable` writes an unminified page for debugging.
 
 `tools/loudness.cjs` measures the integrated loudness of a 16-bit WAV file (ITU-R BS.1770, with gating):
 

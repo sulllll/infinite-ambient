@@ -163,6 +163,17 @@ function makeWorld(D, T, flyPts, POSES) {
   const occ = new Set();
   rseed(1);
   const tryColumn = (x, z, kind, force, dens = 1) => {
+    // Infinite Ambient: a hand-placed column that stands in the drift's way is moved sideways, 4.6 m from it
+    const dp = flyPts.drift;
+    for (let it = 0; force && dp && it < 4; it++) {
+      let bd = 1e9, bi = 0;
+      for (let i = 0; i < dp.length; i++) { const d = hypot(x - dp[i][0], z - dp[i][2]); if (d < bd) { bd = d; bi = i; } }
+      if (bd >= 4.5) break;
+      const p = dp[bi], a = dp[(bi + dp.length - 1) % dp.length], b = dp[(bi + 1) % dp.length];
+      let tx = b[0] - a[0], tz = b[2] - a[2]; const tl = hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+      const along = (x - p[0]) * tx + (z - p[2]) * tz, side = (z - p[2]) * tx - (x - p[0]) * tz < 0 ? -1 : 1;
+      x = p[0] + tx * along - tz * side * 4.6; z = p[2] + tz * along + tx * side * 4.6;
+    }
     const key = floor(x / 2.3) * 4096 + floor(z / 2.3);
     if (occ.has(key)) return;
     const f = floorsAt(x, z); const c = [];
