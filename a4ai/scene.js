@@ -23,6 +23,8 @@ const vec2 HUB = vec2(-7.15, 87.16);    // symbol centre, mm (x from the wordmar
 const float HUB_R = 11.75, NODE_R = 7.13, SPOKE = 2.2875;
 const vec2 NODE[8] = vec2[8](vec2(40.54, 0.0), vec2(33.375, 33.375), vec2(0.0, 23.7), vec2(-26.304, 26.304),
                              vec2(-26.26, 0.0), vec2(-26.255, -26.255), vec2(0.0, -33.46), vec2(21.56, -21.56));
+vec2 gNode[8];                          // where the eight nodes are now: they fold into the hub and open again
+float gRad[8];
 const vec2 PA[11] = vec2[11](vec2(-50.03, 0.0), vec2(-37.13, 33.57), vec2(-30.23, 33.57), vec2(-17.33, 0.0), vec2(-23.46, 0.0),
                              vec2(-26.43, 7.74), vec2(-40.93, 7.74), vec2(-43.90, 0.0), vec2(0.0), vec2(0.0), vec2(0.0));
 const vec2 HA[11] = vec2[11](vec2(-38.80, 13.28), vec2(-28.56, 13.28), vec2(-33.68, 26.59), vec2(0.0), vec2(0.0), vec2(0.0),
@@ -56,7 +58,7 @@ float logoPart(vec2 p, bool word) {
   } else {
     vec2 q = p - HUB;
     d = length(q) - HUB_R;
-    for (int i = 0; i < 8; i++) d = min(d, min(length(q - NODE[i]) - NODE_R, sdSeg(q, NODE[i]) - SPOKE));
+    for (int i = 0; i < 8; i++) d = min(d, min(length(q - gNode[i]) - gRad[i], sdSeg(q, gNode[i]) - SPOKE * gRad[i] / NODE_R));
   }
   return d;
 }
@@ -143,10 +145,23 @@ void main() {
   float glowk = 1.0 - dayk;                                                  // the lamps of the logo come on at night
   float turn = TAU * uTime / 600.0;                                          // closes after the 600 s wrap of uTime
   vec3 horizon = skyCol(normalize(vec3(rd.x, 0.02, rd.z)), sun, dayk, dusk);
+  // the symbol is alive: every 75 s the nodes fold into the hub one after another and open again,
+  // and all the time each arm breathes in length and sways a little
+  float bloom = 0.5 - 0.5 * cos(turn * 8.0);
+  for (int i = 0; i < 8; i++) {
+    float fi = float(i);
+    float open = smoothstep(0.0, 1.0, clamp(bloom * 3.2 - fi * 0.16, 0.0, 1.0));
+    float breathe = 1.0 + 0.10 * sin(turn * 37.0 + fi * 2.4) + 0.05 * sin(turn * 61.0 + fi * 1.3);
+    float sway = 0.07 * sin(turn * 23.0 + fi * 1.9) * open;
+    float ext = mix(0.30, 1.0, open) * breathe;
+    float cs = cos(sway), sn = sin(sway);
+    gNode[i] = vec2(NODE[i].x * cs - NODE[i].y * sn, NODE[i].x * sn + NODE[i].y * cs) * ext;
+    gRad[i] = NODE_R * mix(0.45, 1.0, open) * (1.0 + 0.06 * sin(turn * 43.0 + fi));
+  }
 
   // ---- the logo: march only through its bounding box
   float tHit = -1.0;
-  vec3 lo = vec3(-33.0, -1.0, ZL - TH - 0.5), hi = vec3(33.0, 78.5, ZL + TH + 0.5);
+  vec3 lo = vec3(-33.0, -1.0, ZL - TH - 0.5), hi = vec3(33.0, 81.5, ZL + TH + 0.5);
   vec3 ta = (lo - ro) / rd, tb = (hi - ro) / rd;
   vec3 tmn = min(ta, tb), tmx = max(ta, tb);
   float tn = max(max(tmn.x, tmn.y), tmn.z), tf = min(min(tmx.x, tmx.y), tmx.z);
@@ -189,7 +204,7 @@ void main() {
     if (m.y > 40.0) {
       vec2 q = m - HUB;
       float rn = length(q) * 0.72;
-      for (int i = 0; i < 8; i++) rn = min(rn, length(q - NODE[i]));
+      for (int i = 0; i < 8; i++) rn = min(rn, length(q - gNode[i]) * NODE_R / gRad[i]);
       lamp = smoothstep(2.7, 2.1, rn);
     }
     float pulse = 0.7 + 0.3 * sin(turn * 5.0 + m.x * 0.08);
